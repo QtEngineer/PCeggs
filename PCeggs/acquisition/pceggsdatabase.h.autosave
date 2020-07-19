@@ -1,0 +1,24 @@
+﻿#ifndef PCEGGSDATABASE_H
+#define PCEGGSDATABASE_H
+
+#include <QObject>
+#include <QSqlDatabase>
+#include <QSqlQuery>
+#include <QSqlDriver>
+class PCeggsDataBase : public QObject
+{
+    Q_OBJECT
+public:
+    explicit PCeggsDataBase(QObject *parent = nullptr);
+    bool getData(QString LID);
+    bool createData(QString LID,QString issue,QString CTime,QString results,QString results1,QString results2,QString results3);
+    bool createTable();
+    bool getAllTrainingData();
+private:
+    QSqlDatabase db;
+
+signals:
+
+};
+
+#endif // PCEGGSDATABASE_H

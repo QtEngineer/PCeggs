@@ -1,0 +1,313 @@
+﻿#include "betinformation.h"
+#include <QNetworkCookie>
+#include <QWebEngineProfile>
+#include <QWebEngineCookieStore>
+#include <QFile>
+#include <QByteArray>
+#include <QTest>
+#include <QTextStream>
+BetInformation::BetInformation(QObject* parent):QObject(parent),
+webView(new QWebEngineView),
+request(new QWebEngineHttpRequest),
+baseUrl( QUrl("http://www.pceggs.com/play/pxya.aspx")),
+e_results("(chkResult\\(')(\\w+)(\\s\\+\\s)(\\w+)(\\s\\+\\s)(\\w+)(\\s=\\s',\\s')(\\w+)"),
+e_issue("(height=\"32\" bgcolor=\"#FFFaC7\">)(\\w+)"),
+e_CTime("(height=\"28\" bgcolor=\")(#FFFFFF|#f8f8f8)(\">)(\\S+\\s\\S+)(</td>)"),
+e_LID("(chkwin\\('\\w+',\\s')(\\w+)"),
+e_status("(chkStatus\\(')(\\w+)"),
+//e_results("(chkResult\\(')(\\w+)(\\s\\+\\s)(\\w+)(\\s\\+\\s)(\\w+)(\\s=\\s',\\s')(\\w+)"),    //7 + 0 + 2 = ', '19
+e_account("(金蛋：<b>)(\\S+)")
+{
+    //initial();
+    /*if(!db.createTable())
+        qDebug()<<"create table fail!";*/
+
+}
+void BetInformation::setCookie(QNetworkCookieJar *cookies)
+{
+    for(QNetworkCookie cookie:cookies->cookiesForUrl(QUrl("http://www.pceggs.com")))
+    {
+        //qDebug()<<"the cookie:"<<cookie;
+        webView->page()->profile()->cookieStore()->setCookie(cookie,QUrl("http://www.pceggs.com"));
+    }
+    request->setUrl(QUrl("http://www.pceggs.com"));
+    request->setHeader(QByteArray("Accept"),QByteArray("application/json, text/javascript, */*; q=0.01"));
+    request->setHeader(QByteArray("Accept-Language"),QByteArray("zh-CN,zh;q=0.8,zh-TW;q=0.7,zh-HK;q=0.5,en-US;q=0.3,en;q=0.2"));
+    request->setHeader(QByteArray("Host"),QByteArray("www.pceggs.com"));
+    request->setHeader(QByteArray("Accept-Encoding"),QByteArray("gzip, deflate"));
+    request->setHeader(QByteArray("X-Requested-With"),QByteArray("XMLHttpRequest"));
+    request->setHeader(QByteArray("Connection"),QByteArray("keep-alive"));
+
+
+
+}
+void BetInformation::initial()
+{
+    // net work
+
+    //webView->load(*request);
+    connect(webView,&QWebEngineView::loadFinished,[=](){qDebug()<<"load!";});
+    connect(webView,&QWebEngineView::loadFinished,&loop,&QEventLoop::quit);
+    connect(&timer,&QTimer::timeout,this,&BetInformation::getRealTimeData);
+    connect(this,SIGNAL(downloadFinished(int)),&timer,SLOT(start(int)));// to make download all data before getting new
+    // to get realtime data
+    webView->load(QUrl("http://www.pceggs.com/play/pxya.aspx"));
+    loop.exec();
+
+}
+bool BetInformation::getRealTimeData()
+{
+    if(!timer.isActive())
+    {
+        timer.start(5*60*1000);
+        return false;
+    }
+    QString js=QString("onsubmit(%1)").arg(1);
+    webView->page()->runJavaScript(js);
+    webView->page()->toHtml([&](QString x)
+    {
+        rawInfo=x;
+    });
+    loop.exec();
+    current_LID=getLID();
+    qDebug()<<current_LID;
+    if(!db.createData(LID.at(0),issue.at(0),CTime.at(0),results.at(0),results1.at(0),results2.at(0),results3.at(0)))
+    {
+        qDebug()<<"insert new fail";
+        return false;
+    }
+    return true;
+
+    /*QFile f_data("E:/QtProject/PCeggs/shared/data.txt");
+    if (!f_data.open(QIODevice::ReadWrite | QIODevice::Text))
+    {
+        qDebug()<<"open error";
+        return false;
+    }
+    QByteArray  line = f_data.readLine(8);
+    QString str(line);
+    QString compare=str.trimmed();
+    if(compare.toInt()<current_LID.toInt())
+    {
+        QByteArray arr;
+        getAllInformation();
+        //arr.append(LID.at(0)).append("\t").append( issue.at(0)).append("\t").append(CTime.at(0)).append("\t").append(results.at(0)).append("\n")
+    }
+    else
+        return false;
+    //f_data.close();*/
+
+}
+void BetInformation::downloadData()
+{
+
+    int amount=22; //the number depended on data website,not fixed
+    QString js;
+    for(int i=amount;i>0;i--)
+    {
+
+         js=QString("onsubmit(%1)").arg(i);
+         qDebug()<<"page"<<i;
+         webView->page()->runJavaScript(js);
+         loop.exec();
+         webView->page()->toHtml([&](QString x)
+         {
+             rawInfo=x;
+             getAllInformation();
+
+         });
+         loop.exec();
+
+         //save to local
+         QFile f_data("E:/QtProject/PCeggs/shared/data.txt");
+         if (!f_data.open(QIODevice::ReadWrite | QIODevice::Text/*|QIODevice::Append*/))
+         {
+             qDebug()<<"open error";
+             return;
+         }
+
+         QTextStream in(&f_data);
+         //QByteArray temp=f_data.readAll();
+         QTextStream out(&f_data);
+         QByteArray arr;
+
+         //this may not run qucikly ,
+         int  t_count=0;
+
+         int empty;//for the fomer data is empty
+         if(i==1)empty=6;
+         else empty=0;
+
+         if(t_count<issue.size()||t_count<CTime.size()||t_count<results.size()||t_count<LID.size())qDebug()<<"not empty";
+         else qDebug()<<"empty";
+         qDebug()<<issue.size()<<CTime.size()<<results.size()<<LID.size();
+
+         //if already has had old data ,stop downloading
+         QString  str = in.readLine(8);
+         QString compare=str.trimmed();
+         //qDebug()<<compare<<LID.at(t_count+empty);
+         if(LID.isEmpty()||LID.size()<(t_count+empty)||compare.toInt()>=LID.at(t_count+empty).toInt())continue;
+
+         while(t_count<results.size())   //each row has itslef total data
+         {
+
+             //arr.append(LID.at(t_count+empty)).append("\t").append( issue.at(t_count+empty)).append("\t").append(CTime.at(t_count+empty)).append("\t").append(results.at(t_count)).append("\n");
+             if(!db.createData(LID.at(t_count+empty),issue.at(t_count+empty),CTime.at(t_count+empty),results.at(t_count),results1.at(t_count),results2.at(t_count),results3.at(t_count)))qDebug()<<"INSERT fail!";
+             t_count++;
+         }
+
+         //out<<arr;
+         /*int j=0;
+         f_data.write("arr");
+         while(j<=t_count-2)
+         {
+             f_data.write("\n");
+            // out<<"\n";
+             j++;
+         }
+         f_data.write("arr");
+         //out.flush();
+         f_data.seek(0);
+         f_data.write(arr);*/
+
+         f_data.close();
+         /*if(f_data.write(arr)==-1)qDebug()<<"error";*/
+
+         //QTest::qWait(3000);
+    }
+
+    emit(downloadFinished(5*60*1000));
+}
+void BetInformation::getAllInformation()
+{
+    getLID();
+    getIssue(0);
+    getCTime(0);
+    getResults(0);
+    qDebug()<<"finished";
+    if(loop.isRunning())
+        loop.quit();
+
+}
+QString BetInformation::getResults(int)
+{
+    bool ok;
+    results.clear();
+    results1.clear();
+    results2.clear();
+    results3.clear();
+    QString temp(rawInfo);
+    int pos=e_results.indexIn(temp);
+    qDebug()<<"pos"<<pos;
+    while(pos>-1)
+    {
+        results.append(QString::number( e_results.cap(8).toInt(&ok,10)-10,10));
+        results1.append(QString::number( e_results.cap(2).toInt(&ok,10),10));
+        results2.append(QString::number( e_results.cap(4).toInt(&ok,10),10));
+        results3.append(QString::number( e_results.cap(6).toInt(&ok,10),10));
+        qDebug()<<e_results.cap(2).toInt(&ok,10)<<e_results.cap(4).toInt(&ok,10)<<e_results.cap(6).toInt(&ok,10);
+        temp=temp.mid(pos+e_results.cap(1).length());
+        pos=e_results.indexIn(temp);
+
+    }
+
+
+
+    //only used to test
+    return nullptr;
+
+}
+QString BetInformation::getIssue(int i)
+{
+
+
+    issue.clear();
+    bool ok;
+    QString temp(rawInfo);
+    //qDebug()<<temp;
+    int pos=e_issue.indexIn(temp);
+    //issue_no=e_issue.cap(2).toInt(&ok,10);
+    qDebug()<<"issuepos"<<pos;
+
+    while(pos>-1)
+    {
+
+
+
+        issue.append(e_issue.cap(2));
+        //qDebug()<<e_issue.cap(2);
+        temp=temp.mid(pos+e_issue.cap(1).length());
+        pos=e_issue.indexIn(temp);
+
+    }
+    //qDebug()<<issue;
+
+    //return nullptr;
+    if(issue.size()>i+6)return issue[i+6];
+    else return nullptr;
+
+}
+
+QString BetInformation::getCTime(int i)
+{
+    CTime.clear();
+    QString temp(rawInfo);
+    int pos=e_CTime.indexIn(temp);
+    while(pos>-1)
+    {
+        CTime.append(e_CTime.cap(4));
+        temp=temp.mid(pos+e_CTime.cap(1).length());
+        pos=e_CTime.indexIn(temp);
+
+    }
+    //qDebug()<<CTime;
+
+    if(CTime.size()>(i+6))return CTime[i+6];
+    else return nullptr;
+
+
+
+}
+
+QString BetInformation::getLID()
+{
+
+    LID.clear();
+    QString temp(rawInfo);
+    int pos=e_LID.indexIn(temp);
+    while(pos>-1)
+    {
+        LID.append(e_LID.cap(2));
+        temp=temp.mid(pos+e_LID.cap(1).length());
+        pos=e_LID.indexIn(temp);
+
+    }
+    qDebug()<<"LIDpos"<<LID;
+    if(LID.size()>5) return LID[5];
+    else return nullptr;
+
+
+}
+QString BetInformation::getStatus()
+{
+    status.clear();
+    QString temp(rawInfo);
+    int pos=e_status.indexIn(temp);
+    while(pos>-1)
+    {
+        status.append(e_status.cap(2));
+        temp=temp.mid(pos+e_status.cap(1).length());
+        pos=e_status.indexIn(temp);
+
+    }
+    //qDebug()<<status;
+
+    return status[5];
+
+
+}
+BetInformation::~BetInformation()
+{
+    delete webView;
+    delete request;
+}

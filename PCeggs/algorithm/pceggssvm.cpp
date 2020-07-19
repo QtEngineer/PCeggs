@@ -1,0 +1,10 @@
+﻿#include "pceggssvm.h"
+
+PCeggsSVM::PCeggsSVM(QObject *parent) : QObject(parent)
+{
+
+}
+void PCeggsSVM::setTrainingData()
+{
+
+}

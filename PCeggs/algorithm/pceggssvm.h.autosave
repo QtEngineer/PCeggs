@@ -1,0 +1,20 @@
+﻿#ifndef PCEGGSSVM_H
+#define PCEGGSSVM_H
+
+#include <QObject>
+//#include "opencv_modules.hpp"
+#include "opencv.hpp"
+#include "acquisition/pceggsdatabase.h"
+class PCeggsSVM : public QObject
+{
+    Q_OBJECT
+public:
+    explicit PCeggsSVM(QObject *parent = nullptr);
+    void setTrainingData();
+private:
+    PCeggsDataBase db;
+signals:
+
+};
+
+#endif // PCEGGSSVM_H
